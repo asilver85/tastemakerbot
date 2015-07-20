@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<script>
+	function signOn() {
+		$.ajax({
+			url: "/botcontrol/signon/",
+			success: function(result){
+    		}
+    	});
+	}
+</script>
+
+<p>
+	<label>Start bot: </label>
+	<button onclick="signOn()">go!</button>
+</p>
+
+{% endblock %}
