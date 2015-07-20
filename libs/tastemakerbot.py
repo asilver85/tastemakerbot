@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import slacker
 import websocket
 import json
@@ -34,8 +35,12 @@ class TasteMakerBot:
     user_map = {}
 
     help_message = 'Hola! I am the Gracenote Tastemaker Bot. I know 2 commands:\n\n' \
-                    '\t*Dime* to get a recommendation\n' \
-                    '\t*Ten* to add a recommendation\n'
+                    '\t*dime* to get a recommendation\n' \
+                    '\t*ten* to add a recommendation\n'
+
+    bad_language_message = 'Que patán! No need for profanity.'
+
+    bad_language = ['fuck', 'shit', 'bitch', 'ass', 'slut', 'cunt', 'dick', 'whore']
 
     def __init__(self, slack):
         self.userid = ''
@@ -135,37 +140,42 @@ class TasteMakerBot:
                 return
 
             ### here is where message handling happens ###
-            response_message = TasteMakerBot.help_message
+            response_messages = [TasteMakerBot.help_message]
             try:
                 message = message_data['text']
 
                 if message.lower().startswith('dime') or message.lower().startswith('ten'):
                     self._start_convo(userid, username, message)
-                    response_message = self.user_convo_map[userid].message
+                    response_messages = self.user_convo_map[userid].messages
                 elif message.lower() in ['help', 'hi', 'hello', 'hey', 'hola']:
-                    response_message = TasteMakerBot.help_message
+                    response_messages = [TasteMakerBot.help_message]
                 elif userid in self.user_convo_map:
                     convo = self.user_convo_map[userid]
 
                     if convo.waiting:
                         convo.load_next_message(message)
-                        response_message = convo.message
+                        response_messages = convo.messages
+                    elif self._has_bad_language(message):
+                        response_messages = [TasteMakerBot.bad_language_message]
 
                     ### convo is done ###
                     if not convo.waiting:
                         del self.user_convo_map[userid]
+                elif self._has_bad_language(message):
+                    response_messages = [TasteMakerBot.bad_language_message]
 
             finally:
                 self._release_user_convo_lock(userid)
 
-            self.slack.chat.post_message(
-                    channel=message_data['channel'],
-                    text=response_message,
-                    unfurl_media=False,
-                    unfurl_links=False,
-                    as_user=True,
-                    link_names=1
-                )
+            for response_message in response_messages:
+                self.slack.chat.post_message(
+                        channel=message_data['channel'],
+                        text=response_message,
+                        unfurl_media=True,
+                        unfurl_links=True,
+                        as_user=True,
+                        link_names=1
+                    )
 
         except Exception as e:
             logging.info('Error in handle message: %s' % str(e))
@@ -246,6 +256,13 @@ class TasteMakerBot:
             return username
 
         return None
+
+    def _has_bad_language(self, message):
+        message_low = message.lower()
+        for word in TasteMakerBot.bad_language:
+            if word in message_low:
+                return True
+        return False
 
 ### end bot class ###
 
@@ -330,7 +347,8 @@ class BotConversation:
                     'Ijoles, that is a popular one. I already have that recommendation.',
                     'Your recommendation has been added.\n' \
                         'Want to make this project even cooler? Tell us if your pick is in the Rhythm catalog here: ',
-                    'Chutas! I was unable to add that recommendation :('
+                    'Chutas! I was unable to add that recommendation :(',
+                    'That link is too long. Try something less than 256 characters.'
                 ]
     }
 
@@ -340,13 +358,14 @@ class BotConversation:
         self.waiting = False
         self.timestamp = datetime.datetime.utcnow()
         self.convo_index = 0
-        self.message = ''
+        self.messages = []
         self.rec_engine = RecEngine()
         self.rec_id = -1
         self.rec_link = ''
         self.rec_desc = ''
 
-        if message.lower().startswith('ten'):
+        message_low = message.lower()
+        if message_low.startswith('ten'):
             self.convo_key = BotConversation.TEN
         else:
             self.convo_key = BotConversation.DIME
@@ -355,6 +374,8 @@ class BotConversation:
 
     ### need to refactor this part ###
     def load_next_message(self, response):
+        self.messages = []
+        response_low = response.lower()
 
         if self.convo_key == BotConversation.DIME:
 
@@ -366,82 +387,84 @@ class BotConversation:
                 if len(message_data) > 1:
                     rec_username = message_data[1]
 
-                if rec_username is not None:
-                    print 'USING REC USER %s' % rec_username
-
                 result = self.rec_engine.get_rec(self.username, rec_username)
 
                 ### success ###
                 if result[0]:
                     self.rec_id = result[1]
-                    self.message = 'Check out this recommendation from @%s:' % result[4]
+                    self.messages.append('Check out this recommendation from @%s:' % result[4])
 
                     ### add description ###
                     if len(result[3]) > 0:
-                        self.message += '\n%s' % result[3]
-                    self.message += '\n%s' % result[2]
-                    self.message += '\n\n%s' % BotConversation.convo_map[self.convo_key][0]
+                        self.messages[0] += '\n"%s"' % result[3]
+
+                    self.messages[0] += '\n%s' % result[2]
+                    self.messages.append(BotConversation.convo_map[self.convo_key][0])
                     self.convo_index += 1
                     self.waiting = True
                 ### failed getting rec ###
                 else:
-                    self.message = BotConversation.convo_map[self.convo_key][2]
+                    self.messages.append(BotConversation.convo_map[self.convo_key][2])
                     self.waiting = False
 
             ### like/dislike recommendation####
             elif self.convo_index == 1:
                 like = None
-                if response.lower().startswith('y'):
+                if response_low.startswith('y'):
                     like = True
-                elif response.lower().startswith('n'):
+                elif response_low.startswith('n'):
                     like = False
                 
                 if like is not None:
                     self.rec_engine.add_like_dislike(self.username, self.rec_id, like)
-                    self.message = BotConversation.convo_map[self.convo_key][1]
+                    self.messages.append(BotConversation.convo_map[self.convo_key][1])
                     self.waiting = False
                 else:
-                    self.message = BotConversation.convo_map[self.convo_key][0]
+                    self.messages.append(BotConversation.convo_map[self.convo_key][0])
                     self.waiting = True
 
         elif self.convo_key == BotConversation.TEN:
             ### ask for link ###
             if self.convo_index == 0:
-                self.message = BotConversation.convo_map[self.convo_key][0]
+                self.messages.append(BotConversation.convo_map[self.convo_key][0])
                 self.convo_index = 1
                 self.waiting = True
 
             ### ask if want to add description ###
             elif self.convo_index == 1:
-                if self._is_message_link(response):
+                if len(response) > 255:
+                    self.waiting = False
+                    self.messages.append(BotConversation.convo_map[8])
+                    self.convo_index = 0
+                elif self._is_message_link(response):
                     self.rec_link = self._clean_link(response)
-                    self.message = BotConversation.convo_map[self.convo_key][2]
+                    self.messages.append(BotConversation.convo_map[self.convo_key][2])
                     self.convo_index = 2
                     self.waiting = True
                 else:
                     self.rec_link = self._clean_link(response)
-                    self.message = BotConversation.convo_map[self.convo_key][1]
+                    self.messages.append(BotConversation.convo_map[self.convo_key][1])
                     self.convo_index = 3
                     self.waiting = True
 
             ### process y/n for description ###
             elif self.convo_index == 2:
-                if response.lower().startswith('y'):
-                    self.message = BotConversation.convo_map[self.convo_key][3]
+                if response_low.startswith('y'):
+                    self.messages.append(BotConversation.convo_map[self.convo_key][3])
                     self.convo_index = 4
                     self.waiting = True
-                elif response.lower().startswith('n'):
+                elif response_low.startswith('n'):
                     self.rec_desc = ''
                     self._add_rec()
 
             ### are you sure that's a link ###
             elif self.convo_index == 3:
-                if response.lower().startswith('y'):
-                    self.message = BotConversation.convo_map[self.convo_key][2]
+                if response_low.startswith('y'):
+                    self.messages.append(BotConversation.convo_map[self.convo_key][2])
                     self.convo_index = 2
                     self.waiting = True
-                elif response.lower().startswith('n'):
-                    self.message = BotConversation.convo_map[self.convo_key][0]
+                elif response_low.startswith('n'):
+                    self.messages.append(BotConversation.convo_map[self.convo_key][0])
                     self.convo_index = 1
                     self.waiting = True
 
@@ -451,7 +474,7 @@ class BotConversation:
                     self.rec_desc = response
                     self._add_rec()
                 else:
-                    self.message = BotConversation.convo_map[self.convo_key][4]
+                    self.messages.append(BotConversation.convo_map[self.convo_key][4])
                     self.convo_index = 4
                     self.waiting = True
 
@@ -463,13 +486,13 @@ class BotConversation:
     def _add_rec(self):
         result = self.rec_engine.add_rec(self.username, self.rec_link, self.rec_desc)
         if result[0]:
-            self.message = BotConversation.convo_map[self.convo_key][6]
+            self.messages.append(BotConversation.convo_map[self.convo_key][6])
             self.waiting = False
         elif result[1] == 409:  ### rec already exists ###
-            self.message = BotConversation.convo_map[self.convo_key][5]
+            self.messages.append(BotConversation.convo_map[self.convo_key][5])
             self.waiting = False
         else:
-            self.message = BotConversation.convo_map[self.convo_key][7]
+            self.messages.append(BotConversation.convo_map[self.convo_key][7])
             self.waiting = False
 
     def _is_message_link(self, message):

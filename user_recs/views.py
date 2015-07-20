@@ -98,7 +98,8 @@ def add_recommendation(request):
                             gracenote_id=None,
                             likes=0,
                             dislikes=0,
-                            timestamp=timezone.now())
+                            timestamp=timezone.now(),
+                            is_youtube=is_youtube(data['link']))
 
         new_rec.save()
 
@@ -176,6 +177,9 @@ def add_gracenoteid(request):
         result = get_error_response(500, 'unknown error')
 
     return JsonResponse(result)
+
+def is_youtube(link):
+    return 'youtube.com' in link or 'youtu.be' in link
 
 def get_user_no_create(username):
     if User.objects.filter(slack_username=username).exists():

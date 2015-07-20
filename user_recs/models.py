@@ -13,6 +13,7 @@ class UserRecommendation(models.Model):
     likes = models.PositiveIntegerField()
     dislikes = models.PositiveIntegerField()
     timestamp = models.DateTimeField()
+    is_youtube = models.BooleanField()
 
 class UserLikeDislike(models.Model):
     user = models.ForeignKey(User)
