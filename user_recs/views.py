@@ -8,7 +8,15 @@ import json
 import random
 import datetime
 
-NUM_RECS_IN_PROFILE = 5
+NUM_RECS_IN_PROFILE = 10
+
+COLLAB_FILTER_MAX_LIKES = 100
+COLLAB_FILTER_MAX_SIMILAR_USERS = 3
+COLLAB_FILTER_MIN_SCORE_SIMILAR_USERS = 3
+
+MAX_CANDIDATES_RAND = 10
+MAX_CANDIDATE_COLLAB_FILTER = 10
+
 # Create your views here.
 
 @csrf_exempt
@@ -39,10 +47,22 @@ def get_recommendation(request):
                 result = get_error_response(400, 'could not find user')
                 return JsonResponse(result)
 
-        rec = get_rand_rec(user.id, last_rec_ids, rec_user)
-        
+        rec = None
+        ### if user specified, just get a random rec from user ###
+        if rec_user is not None:
+            rec = get_rand_rec(user.id, last_rec_ids, rec_user)
+        else:
+            rand_candidates = get_rand_recs_sample(user.id, last_rec_ids, rec_user, MAX_CANDIDATES_RAND)
+
+            like_dislike_map, like_ids = get_user_like_info(user)
+            collab_filt_candidates = get_collab_filter_recs_sample(user, like_ids, like_dislike_map, last_rec_ids, MAX_CANDIDATE_COLLAB_FILTER)
+            
+            all_candidates = rand_candidates + collab_filt_candidates
+            if len(all_candidates) > 0:
+                rec = random.choice(all_candidates)
+
+        ### if failed to get rec, get random rec without specifying history ###
         if rec is None:
-            ### try to get rec without specifying last ones
             rec = get_rand_rec(user.id, [], rec_user)
 
             if rec is None:
@@ -129,25 +149,42 @@ def like_dislike(request):
         return JsonResponse(result)
 
     try:
-
-        rec = UserRecommendation.objects.get(id=data['recommendation_id'])
+        rec_user = UserRecommendation.objects.get(id=data['recommendation_id']).user.slack_username
         
         ### you cannot like your own!!! ###
-        if username == rec.user.slack_username:
+        if data['username'] == rec_user:
             result = get_error_response(409, 'cannot like own recommendation')
             return JsonResponse(result)
 
-        if result['like']:
-            rec.likes += 1
+        ### keep track of how many likes/dislikes to add to recommendation row ###
+        ### i am doing it this way to prevent race condition ###
+        likes_add = 0
+        dislikes_add = 0
 
+        if data['like']:
+            likes_add += 1
         else:
-            rec.dislikes += 1
+            dislikes_add += 1
 
-        rec.save()
+        ### check if user already liked/disliked this ###
         user = get_user(data['username'])
-        update_user_like_dislike(user, rec, data['like'])
+        user_like_dislike = get_user_like_dislike(user, rec)
+        if user_like_dislike is not None:
+            if user_like_dislike.like:
+                likes_add -= 1
+            else:
+                dislikes_add -= 1
 
-    except:
+            user_like_dislike.like = data['like']
+            user_like_dislike.save()
+        else:
+            add_user_like_dislike(user, rec, data['like'])
+
+        ### update likes/dislikes count for rec in one update ###
+        UserRecommendation.objects.get(id=data['recommendation_id']).update(likes=F('likes') + likes_add, dislikes=F('dislikes') + dislikes_add)
+
+    except Exception as e:
+        print str(e)
         result = get_error_response(500, 'unkown error')
 
     return JsonResponse(result)
@@ -212,21 +249,23 @@ def get_last_rec_ids(user):
     return last_rec_ids
 
 def get_rand_rec(userid, last_rec_ids, rec_user):
+    candidates = get_rand_recs_sample(userid, last_rec_ids, rec_user, 1)
+    if len(candidates) == 0:
+        return None
 
-    print 'HERE %d %d' % (userid, len(last_rec_ids))
-    print rec_user is None
+    return candidates[0]
 
+def get_rand_recs_sample(userid, last_rec_ids, rec_user, num_recs):
     if rec_user is not None:
         candidates = UserRecommendation.objects.filter(user__id=rec_user.id).exclude(id__in=last_rec_ids)
     else:
         candidates = UserRecommendation.objects.exclude(user__id=userid).exclude(id__in=last_rec_ids)
-    
+
     if len(candidates) == 0:
-        return None
+        return []
 
-    rand_index = random.randint(1, len(candidates)) - 1
-
-    return candidates[rand_index]
+    num_samples = num_recs if len(candidates) >= num_recs else len(candidates)
+    return random.sample(candidates, num_samples)
 
 def update_user_profile(user, new_rec_id, last_rec_ids):
     
@@ -238,14 +277,99 @@ def update_user_profile(user, new_rec_id, last_rec_ids):
 
     user.save()
 
-def update_user_like_dislike(user, rec, like):
+def get_user_like_dislike(user, rec):
+    if UserLikeDislike.filter(user__id=user.id, rec__id=rec.id).exists():
+        return UserLikeDislike.objects.get(user__id=user.id, rec__id=rec.id)
 
+    return None
+
+def add_user_like_dislike(user, rec, like):
     if not UserLikeDislike.filter(user__id=user.id, rec__id=rec.id).exists():
         user_like_dislike = UserLikeDislike(user=user, rec=rec, like=like, timestamp=timezone.now())
         user_like_dislike.save()
-    else:
-        user_like_dislike = UserLikeDislike.objects.get(user__id=user.id, rec__id=rec.id)
-        
-        user_like_dislike.like = like
-        user_like_dislike.timestamp = timezone.now()
-        user_like_dislike.save()
+
+def get_user_like_info(user):
+    like_dislike_map = {}
+    like_list = []
+    like_count = 0
+
+    user_like_dislikes = UserLikeDislike.objects.filter(user__id=user.id)
+
+    ### choose max COLLAB_FILTER_MAX_LIKES random likes ###
+    random.shuffle(user_like_dislikes)
+    for user_like_dislike in user_like_dislikes:
+        if user_like_dislike.like and like_count < COLLAB_FILTER_MAX_LIKES:
+            like_dislike_map[user_like_dislike.rec.id] = True
+            like_list.append(user_list_dislike.rec.id)
+            like_count += 1 
+        else:
+            like_dislike_map[user_like_dislike.rec.id] = False
+
+    return (like_dislike_map, like_list)
+
+def get_collab_filter_recs_sample(user, like_ids, like_dislike_map, last_rec_ids, num_recs):
+
+    if len(like_ids) == 0:
+        return []
+
+    last_rec_dict = {}
+
+    for id in last_rec_ids:
+        last_rec_dict[id] = True
+
+    ### get all users with same likes ###
+    shared_like_userids = UserLikeDislike.objects.exclude(user__id=user.id).filter(rec__id__in=like_ids).values_list('user_id', flat=True).distinct()
+
+    if len(shared_like_userids) == 0:
+        return []
+
+    ## get likes dislikes of these users###
+    other_like_dislikes = UserLikeDislike.objects.filter(user__id__in=shared_like_userids)
+
+    similar_users = {}
+    for userid in shared_like_userids:
+        similar_users[userid] = {
+            'score' : 0,
+            'candidates' : []
+        }
+    
+    for other_like_dislike in other_like_dislikes:
+        recid = other_like_dislike.rec.id
+        userid = other_like_dislike.user.id
+
+        if recid in like_dislike_map:
+            if other_like_dislike.like == like_dislike_map[recid]:
+                similar_users[userid]['score'] += 1
+            else:
+                similar_users[userid]['score'] -= 1
+
+        elif other_like_dislike.like and recid not in last_rec_dict:
+            similar_users[userid]['candidates'].append(recid)
+
+    ### sort by score ###
+    simliar_users_list_sorted = sorted(similar_users.values(), key=lambda user: user['score'], reverse=True)
+    count_sim_users = 0
+    suggested_recids = []
+    for user in simliar_users_list_sorted:
+        if count_sim_users >= COLLAB_FILTER_MAX_SIMILAR_USERS:
+            break
+
+        if user['score'] < COLLAB_FILTER_MIN_SCORE_SIMILAR_USERS:
+            break
+
+        suggested_recids += user['candidates']
+
+    
+    recs = UserRecommendation.objects.filter(id__in=suggested_recids)
+
+    if len(recs) == 0:
+        return []
+
+    samples = num_recs if len(recs) >= num_recs else len(recs)
+    return random.sample(recs, samples)
+
+
+
+
+
+

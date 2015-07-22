@@ -321,6 +321,7 @@ class RecEngine:
         }
 
         r = requests.post(url, data=json.dumps(data))
+        print r.text
         result = json.loads(r.text)
         if result['status'] != 'ok':
             return False, result['error_id'], result['error_message']
@@ -374,7 +375,7 @@ class BotConversation:
 
     ### need to refactor this part ###
     def load_next_message(self, response):
-        self.messages = []
+
         response_low = response.lower()
 
         if self.convo_key == BotConversation.DIME:
@@ -392,11 +393,11 @@ class BotConversation:
                 ### success ###
                 if result[0]:
                     self.rec_id = result[1]
-                    self.messages.append('Check out this recommendation from @%s:' % result[4])
+                    self.messages = ['Check out this recommendation from @%s:' % result[4]]
 
                     ### add description ###
                     if len(result[3]) > 0:
-                        self.messages[0] += '\n"%s"' % result[3]
+                        self.messages[0] += '\n\n"%s"' % result[3]
 
                     self.messages[0] += '\n%s' % result[2]
                     self.messages.append(BotConversation.convo_map[self.convo_key][0])
@@ -404,7 +405,7 @@ class BotConversation:
                     self.waiting = True
                 ### failed getting rec ###
                 else:
-                    self.messages.append(BotConversation.convo_map[self.convo_key][2])
+                    self.messages = [BotConversation.convo_map[self.convo_key][2]]
                     self.waiting = False
 
             ### like/dislike recommendation####
@@ -417,16 +418,16 @@ class BotConversation:
                 
                 if like is not None:
                     self.rec_engine.add_like_dislike(self.username, self.rec_id, like)
-                    self.messages.append(BotConversation.convo_map[self.convo_key][1])
+                    self.messages = [BotConversation.convo_map[self.convo_key][1]]
                     self.waiting = False
                 else:
-                    self.messages.append(BotConversation.convo_map[self.convo_key][0])
+                    self.messages = [BotConversation.convo_map[self.convo_key][0]]
                     self.waiting = True
 
         elif self.convo_key == BotConversation.TEN:
             ### ask for link ###
             if self.convo_index == 0:
-                self.messages.append(BotConversation.convo_map[self.convo_key][0])
+                self.messages = [BotConversation.convo_map[self.convo_key][0]]
                 self.convo_index = 1
                 self.waiting = True
 
@@ -434,23 +435,23 @@ class BotConversation:
             elif self.convo_index == 1:
                 if len(response) > 255:
                     self.waiting = False
-                    self.messages.append(BotConversation.convo_map[8])
+                    self.messages = [BotConversation.convo_map[8]]
                     self.convo_index = 0
                 elif self._is_message_link(response):
                     self.rec_link = self._clean_link(response)
-                    self.messages.append(BotConversation.convo_map[self.convo_key][2])
+                    self.messages = [BotConversation.convo_map[self.convo_key][2]]
                     self.convo_index = 2
                     self.waiting = True
                 else:
                     self.rec_link = self._clean_link(response)
-                    self.messages.append(BotConversation.convo_map[self.convo_key][1])
+                    self.messages = [BotConversation.convo_map[self.convo_key][1]]
                     self.convo_index = 3
                     self.waiting = True
 
             ### process y/n for description ###
             elif self.convo_index == 2:
                 if response_low.startswith('y'):
-                    self.messages.append(BotConversation.convo_map[self.convo_key][3])
+                    self.messages = [BotConversation.convo_map[self.convo_key][3]]
                     self.convo_index = 4
                     self.waiting = True
                 elif response_low.startswith('n'):
@@ -460,11 +461,11 @@ class BotConversation:
             ### are you sure that's a link ###
             elif self.convo_index == 3:
                 if response_low.startswith('y'):
-                    self.messages.append(BotConversation.convo_map[self.convo_key][2])
+                    self.messages = [BotConversation.convo_map[self.convo_key][2]]
                     self.convo_index = 2
                     self.waiting = True
                 elif response_low.startswith('n'):
-                    self.messages.append(BotConversation.convo_map[self.convo_key][0])
+                    self.messages = [BotConversation.convo_map[self.convo_key][0]]
                     self.convo_index = 1
                     self.waiting = True
 
@@ -474,7 +475,7 @@ class BotConversation:
                     self.rec_desc = response
                     self._add_rec()
                 else:
-                    self.messages.append(BotConversation.convo_map[self.convo_key][4])
+                    self.messages = [BotConversation.convo_map[self.convo_key][4]]
                     self.convo_index = 4
                     self.waiting = True
 
@@ -486,13 +487,13 @@ class BotConversation:
     def _add_rec(self):
         result = self.rec_engine.add_rec(self.username, self.rec_link, self.rec_desc)
         if result[0]:
-            self.messages.append(BotConversation.convo_map[self.convo_key][6])
+            self.messages = [BotConversation.convo_map[self.convo_key][6]]
             self.waiting = False
         elif result[1] == 409:  ### rec already exists ###
-            self.messages.append(BotConversation.convo_map[self.convo_key][5])
+            self.messages = [BotConversation.convo_map[self.convo_key][5]]
             self.waiting = False
         else:
-            self.messages.append(BotConversation.convo_map[self.convo_key][7])
+            self.messages = [BotConversation.convo_map[self.convo_key][7]]
             self.waiting = False
 
     def _is_message_link(self, message):
