@@ -36,7 +36,7 @@ def get_recommendation(request):
             return JsonResponse(result)
 
         username = data['username']
-        user = get_user(username)
+        user = get_user_or_create(username)
         last_rec_ids = get_last_rec_ids(user)
 
         rec_user = None
@@ -61,9 +61,10 @@ def get_recommendation(request):
             if len(all_candidates) > 0:
                 rec = random.choice(all_candidates)
 
-        ### if failed to get rec, get random rec without specifying history ###
+        ### if failed to get rec, get random rec with less history ###
         if rec is None:
-            rec = get_rand_rec(user.id, [], rec_user)
+            only_one_last_rec = last_rec_ids[0:1] if len(last_rec_ids) > 0 else []
+            rec = get_rand_rec(user.id, only_one_last_rec, rec_user)
 
             if rec is None:
                 result = get_error_response(500, 'no valid recommendations')
@@ -110,7 +111,7 @@ def add_recommendation(request):
             result = get_error_response(409, 'recommendation already exists')
             return JsonResponse(result)
 
-        user = get_user(data['username'])
+        user = get_user_or_create(data['username'])
         new_rec = UserRecommendation(
                             user=user,
                             link=data['link'],
@@ -167,7 +168,7 @@ def like_dislike(request):
             dislikes_add += 1
 
         ### check if user already liked/disliked this ###
-        user = get_user(data['username'])
+        user = get_user_or_create(data['username'])
         user_like_dislike = get_user_like_dislike(user, rec)
         if user_like_dislike is not None:
             if user_like_dislike.like:
@@ -176,6 +177,7 @@ def like_dislike(request):
                 dislikes_add -= 1
 
             user_like_dislike.like = data['like']
+            user_like_dislike.timestamp = timezone.now()
             user_like_dislike.save()
         else:
             add_user_like_dislike(user, rec, data['like'])
@@ -224,7 +226,7 @@ def get_user_no_create(username):
 
     return None
 
-def get_user(username):
+def get_user_or_create(username):
     if not User.objects.filter(slack_username=username).exists():
         new_user = User(slack_username=username, profile='')
         new_user.save()
@@ -318,7 +320,7 @@ def get_collab_filter_recs_sample(user, like_ids, like_dislike_map, last_rec_ids
         last_rec_dict[id] = True
 
     ### get all users with same likes ###
-    shared_like_userids = UserLikeDislike.objects.exclude(user__id=user.id).filter(rec__id__in=like_ids).values_list('user_id', flat=True).distinct()
+    shared_like_userids = UserLikeDislike.objects.exclude(user__id=user.id).filter(rec__id__in=like_ids, like=True).values_list('user_id', flat=True).distinct()
 
     if len(shared_like_userids) == 0:
         return []
@@ -358,6 +360,8 @@ def get_collab_filter_recs_sample(user, like_ids, like_dislike_map, last_rec_ids
             break
 
         suggested_recids += user['candidates']
+
+        count_sim_users += 1
 
     
     recs = UserRecommendation.objects.filter(id__in=suggested_recids)

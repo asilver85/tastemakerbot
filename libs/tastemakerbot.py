@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import slacker
 import websocket
 import json
 import sys
@@ -9,6 +8,7 @@ import logging
 import os
 import requests
 
+from slackclient import SlackClient
 from tendo import singleton
 
 ### gloabl settings ###
@@ -19,13 +19,14 @@ LOGOUT_USER = 'U06T9VAMC'
 logfile = 'tastemakerbotlog_' +  datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S') + '.log'
 logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), logfile)
 REC_ENGINE_API = 'http://localhost:8000/recs/'
+LOG_LEVEL = logging.DEBUG
 ### end global settings ###
 
 ### logging ###
 logging.basicConfig(
     filename=logfile,
     format='%(asctime)s %(thread)d %(levelname)s: %(message)s',
-    level=logging.DEBUG
+    level=LOG_LEVEL
 )
 ### end logging ###
 
@@ -39,23 +40,23 @@ class TasteMakerBot:
                     '\t*ten* to add a recommendation\n'
 
     bad_language_message = 'Que patán! No need for profanity.'
-
     bad_language = ['fuck', 'shit', 'bitch', 'ass', 'slut', 'cunt', 'dick', 'whore']
 
-    def __init__(self, slack):
+    def __init__(self, slack_client):
         self.userid = ''
         self.user_convo_map = {}
         self.user_convo_locks = {}
-        self.slack = slack
+        self.slack_client = slack_client
         self.logoff_flag = False
         self.new_convo_lock = threading.Lock()
 
     def sign_on(self):
-        response = slack.rtm.start()
+        response = self.slack_client.api_call('rtm.start')
+        response = json.loads(response)
 
         if self._api_response_success(response):
-            self.userid = response.body['self']['id']
-            url = response.body['url']
+            self.userid = response['self']['id']
+            url = response['url']
             logging.info('Bot signed on: user id = %s' % self.userid)
             logging.info('Connected to websocket %s' % url)
 
@@ -74,10 +75,10 @@ class TasteMakerBot:
 
     def _api_response_success(self, response):
 
-        if 'ok' not in response.body:
+        if 'ok' not in response:
             return False
 
-        return response.body['ok']
+        return response['ok']
 
     ### websocket event handlers ###
 
@@ -119,6 +120,8 @@ class TasteMakerBot:
             userid = message_data['user']
             if userid == self.userid:
                 return
+
+            logging.debug('Received message from userid %s: %s', userid, message_data['text'])
 
             self._check_for_logoff(message_data, userid)
             if self.logoff_flag:
@@ -168,7 +171,7 @@ class TasteMakerBot:
                 self._release_user_convo_lock(userid)
 
             for response_message in response_messages:
-                self.slack.chat.post_message(
+                self.slack_client.api_call('chat.postMessage', 
                         channel=message_data['channel'],
                         text=response_message,
                         unfurl_media=True,
@@ -222,7 +225,7 @@ class TasteMakerBot:
             if userid == self.userid:
                 return
 
-            self.slack.chat.post_message(
+            self.slack_client.api_call('chat.postMessage', 
                     channel=message_data['channel'],
                     text='Sorry, I am too busy at the moment. Try again later!',
                     as_user=True
@@ -242,16 +245,21 @@ class TasteMakerBot:
         return False
 
     def _check_for_logoff(self, message_data, userid):
-        if message_data['text'] == LOGOUT_COMMAND and userid == LOGOUT_USER:
-            self.logoff_flag = True
+        if LOGOUT_USER is not None:
+            if message_data['text'] == LOGOUT_COMMAND and userid == LOGOUT_USER:
+                self.logoff_flag = True
+        else:
+            if message_data['text'] == LOGOUT_COMMAND:
+                self.logoff_flag = True
 
     def _get_username(self, userid):
         if userid in TasteMakerBot.user_map:
             return TasteMakerBot.user_map[userid]
 
-        response = slack.users.info(userid)
+        response = self.slack_client.api_call('users.info', user=userid)
+        response = json.loads(response)
         if self._api_response_success(response):
-            username = response.body['user']['name']
+            username = response['user']['name']
             TasteMakerBot.user_map[userid] = username
             return username
 
@@ -337,7 +345,9 @@ class BotConversation:
         DIME : [
                     'Tell me what you think. Do you like that recommendation? (y/n)',
                     'Got it. Thanks!',
-                    'Chutas! I was unable to get a recommendation for you :('
+                    'Chutas! I was unable to get a recommendation for you :(',
+                    'Hey! You cannot like or dislike your own recommendation.',
+                    'Chutas! That didn\'t work :('
                 ],
         TEN : [
                     'Alright! Send me a link to your recommendation.',
@@ -417,8 +427,14 @@ class BotConversation:
                     like = False
                 
                 if like is not None:
-                    self.rec_engine.add_like_dislike(self.username, self.rec_id, like)
-                    self.messages = [BotConversation.convo_map[self.convo_key][1]]
+                    result = self.rec_engine.add_like_dislike(self.username, self.rec_id, like)
+                    if result[0]:
+                        self.messages = [BotConversation.convo_map[self.convo_key][1]]
+                    elif result[1] == 409:
+                        self.messages = [BotConversation.convo_map[self.convo_key][3]]
+                    else:
+                        self.messages = [BotConversation.convo_map[self.convo_key][4]]
+                    
                     self.waiting = False
                 else:
                     self.messages = [BotConversation.convo_map[self.convo_key][0]]
@@ -504,7 +520,7 @@ class BotConversation:
 
 if __name__ == '__main__':
     me = singleton.SingleInstance()     # will sys.exit(-1) if other instance is running
-    slack = slacker.Slacker(API_TOKEN)
-    bot = TasteMakerBot(slack)
+    slack_client = SlackClient(API_TOKEN)
+    bot = TasteMakerBot(slack_client)
 
     bot.sign_on()
