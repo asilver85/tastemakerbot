@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from models import User, UserRecommendation, UserLikeDislike
+from django.db.models import F
 import json
 import random
 import datetime
@@ -53,10 +54,11 @@ def get_recommendation(request):
             rec = get_rand_rec(user.id, last_rec_ids, rec_user)
         else:
             rand_candidates = get_rand_recs_sample(user.id, last_rec_ids, rec_user, MAX_CANDIDATES_RAND)
-
+            print 'HERE AFTER RAND'
             like_dislike_map, like_ids = get_user_like_info(user)
+            print 'HERE likes: %d' % len(like_ids) 
             collab_filt_candidates = get_collab_filter_recs_sample(user, like_ids, like_dislike_map, last_rec_ids, MAX_CANDIDATE_COLLAB_FILTER)
-            
+            print 'AFTER COLLAB FILT'
             all_candidates = rand_candidates + collab_filt_candidates
             if len(all_candidates) > 0:
                 rec = random.choice(all_candidates)
@@ -168,8 +170,9 @@ def like_dislike(request):
             dislikes_add += 1
 
         ### check if user already liked/disliked this ###
+        rec_id = data['recommendation_id']
         user = get_user_or_create(data['username'])
-        user_like_dislike = get_user_like_dislike(user, rec)
+        user_like_dislike = get_user_like_dislike(user, rec_id)
         if user_like_dislike is not None:
             if user_like_dislike.like:
                 likes_add -= 1
@@ -180,14 +183,14 @@ def like_dislike(request):
             user_like_dislike.timestamp = timezone.now()
             user_like_dislike.save()
         else:
-            add_user_like_dislike(user, rec, data['like'])
+            add_user_like_dislike(user, rec_id, data['like'])
 
         ### update likes/dislikes count for rec in one update ###
-        UserRecommendation.objects.get(id=data['recommendation_id']).update(likes=F('likes') + likes_add, dislikes=F('dislikes') + dislikes_add)
+        UserRecommendation.objects.filter(id=data['recommendation_id']).update(likes=F('likes') + likes_add, dislikes=F('dislikes') + dislikes_add)
 
     except Exception as e:
         print str(e)
-        result = get_error_response(500, 'unkown error')
+        result = get_error_response(500, 'unknown error')
 
     return JsonResponse(result)
 
@@ -279,15 +282,15 @@ def update_user_profile(user, new_rec_id, last_rec_ids):
 
     user.save()
 
-def get_user_like_dislike(user, rec):
-    if UserLikeDislike.filter(user__id=user.id, rec__id=rec.id).exists():
-        return UserLikeDislike.objects.get(user__id=user.id, rec__id=rec.id)
+def get_user_like_dislike(user, rec_id):
+    if UserLikeDislike.objects.filter(user__id=user.id, rec__id=rec_id).exists():
+        return UserLikeDislike.objects.get(user__id=user.id, rec__id=rec_id)
 
     return None
 
-def add_user_like_dislike(user, rec, like):
-    if not UserLikeDislike.filter(user__id=user.id, rec__id=rec.id).exists():
-        user_like_dislike = UserLikeDislike(user=user, rec=rec, like=like, timestamp=timezone.now())
+def add_user_like_dislike(user, rec_id, like):
+    if not UserLikeDislike.objects.filter(user__id=user.id, rec__id=rec_id).exists():
+        user_like_dislike = UserLikeDislike(user=user, rec_id=rec_id, like=like, timestamp=timezone.now())
         user_like_dislike.save()
 
 def get_user_like_info(user):
@@ -298,11 +301,16 @@ def get_user_like_info(user):
     user_like_dislikes = UserLikeDislike.objects.filter(user__id=user.id)
 
     ### choose max COLLAB_FILTER_MAX_LIKES random likes ###
-    random.shuffle(user_like_dislikes)
-    for user_like_dislike in user_like_dislikes:
+    
+    ### shuffle list of user likes and dislikes ###
+    list_indices = range(0, len(user_like_dislikes))
+    random.shuffle(list_indices)
+
+    for index in list_indices:
+        user_like_dislike = user_like_dislikes[index]
         if user_like_dislike.like and like_count < COLLAB_FILTER_MAX_LIKES:
             like_dislike_map[user_like_dislike.rec.id] = True
-            like_list.append(user_list_dislike.rec.id)
+            like_list.append(user_like_dislike.rec.id)
             like_count += 1 
         else:
             like_dislike_map[user_like_dislike.rec.id] = False

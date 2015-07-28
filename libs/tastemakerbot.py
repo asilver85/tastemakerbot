@@ -15,7 +15,8 @@ from tendo import singleton
 API_TOKEN = 'xoxb-6950292614-IVcIom9YwCqoLdqlCks8LPU6'
 MAX_CONCURRENT_THREADS = 50
 LOGOUT_COMMAND = 'log off now!'
-LOGOUT_USER = 'U06T9VAMC'
+#LOGOUT_USER = 'U06T9VAMC'
+LOGOUT_USER = None
 logfile = 'tastemakerbotlog_' +  datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S') + '.log'
 logfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), logfile)
 REC_ENGINE_API = 'http://localhost:8000/recs/'
@@ -334,7 +335,7 @@ class RecEngine:
         if result['status'] != 'ok':
             return False, result['error_id'], result['error_message']
 
-        return True
+        return True,
 
 ### convo class ###
 class BotConversation:
