@@ -1,8 +1,10 @@
 from django.shortcuts import render
 from django.http import HttpResponseBadRequest
 from django.http import JsonResponse
+from django.http import HttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from django.template import RequestContext, loader
 from models import User, UserRecommendation, UserLikeDislike
 from django.db.models import F
 import json
@@ -193,6 +195,16 @@ def like_dislike(request):
         result = get_error_response(500, 'unknown error')
 
     return JsonResponse(result)
+
+def track_search(request, rec_id):
+    rec = UserRecommendation.objects.get(id=rec_id)
+
+    template = loader.get_template('tracksearch.html')
+    context = RequestContext(request, {
+        'rec_link': rec.link
+    })
+
+    return HttpResponse(template.render(context))
 
 def add_gracenoteid(request):
     result = {'status' : 'ok'}

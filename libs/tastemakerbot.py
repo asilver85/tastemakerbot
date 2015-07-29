@@ -36,7 +36,7 @@ class TasteMakerBot:
 
     user_map = {}
 
-    help_message = 'Hola! I am the Gracenote Tastemaker Bot. I know 2 commands:\n\n' \
+    help_message = 'Hola! I am the Gracenote Tastemaker Bot. I understand 2 commands:\n\n' \
                     '\t*dime* to get a recommendation\n' \
                     '\t*ten* to add a recommendation\n'
 
@@ -504,7 +504,8 @@ class BotConversation:
     def _add_rec(self):
         result = self.rec_engine.add_rec(self.username, self.rec_link, self.rec_desc)
         if result[0]:
-            self.messages = [BotConversation.convo_map[self.convo_key][6]]
+            search_link = REC_ENGINE_API + 'tracksearch/' + str(result[1])
+            self.messages = [BotConversation.convo_map[self.convo_key][6] + search_link]
             self.waiting = False
         elif result[1] == 409:  ### rec already exists ###
             self.messages = [BotConversation.convo_map[self.convo_key][5]]
