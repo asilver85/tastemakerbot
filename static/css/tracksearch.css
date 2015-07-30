@@ -1,0 +1,8 @@
+ tr.clickable-row { 
+ 	cursor: pointer; 
+}
+
+.modal-body {
+	min-height: 100px;
+}
+

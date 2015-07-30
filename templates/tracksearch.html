@@ -4,15 +4,16 @@
 <div class="page-header">
 	<h1>Find your recommendation in the Rhythm catalog</h1>
 </div>
-<div class="container">
-	<p><strong>Link:</strong> <a href="{{ rec_link }}">{{ rec_link }}</a></p>
-	{% if gracenote_id %}
-		<p class="gracenote-id" id="{{ gracenote_id }}">Track id already set: {{ gracenote_id }}</p>
-	{% else %}
-		<div class="alert alert-warning" role="alert" style="display: none;">
-			Artist name is missing!
-		</div>
-		<form class="form-inline">
+
+<p><strong>Link:</strong> <a href="{{ rec_link }}">{{ rec_link }}</a></p>
+{% if gracenote_id %}
+	<p class="gracenote-id" id="{{ gracenote_id }}">Track id already set: {{ gracenote_id }}</p>
+{% else %}
+	<div id="alert-artist-missing" class="alert alert-danger" role="alert" style="display: none;">
+		Artist name is missing!
+	</div>
+	<div id="search-page">
+		<form class="form-inline" onsubmit="return search_track();">
 			<div class="form-group">
 			    <label class="sr-only" for="artist-name">Artist name</label>
 			    <input type="text" class="form-control" id="artist-name" placeholder="Artist Name">
@@ -24,7 +25,29 @@
 			<button type="submit" class="btn btn-default">Search</button>
 		 </form>
 		 <p style="color: grey;"><small>if your recommendation is an album or a playlist, just choose a favorite track</small></p>
-	{% endif %}
-</div>
+
+		<div id="search-results">
+		</div>
+	</div>
+
+	<!-- modal dialog for track selection -->
+	<div class="modal fade" id="modal-track_select">
+  		<div class="modal-dialog">
+    		<div class="modal-content">
+      			<div class="modal-header">
+        			<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        			<h4 class="modal-title">Modal Title</h4>
+      			</div>
+      			<div class="modal-body"> 
+        			<div id="modal-track-info">Loading track info...</div>
+      			</div>
+      			<div class="modal-footer">
+      				<button type="button" class="btn btn-primary">Set Id!</button>
+        			<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+      			</div>
+    		</div><!-- /.modal-content -->
+  		</div><!-- /.modal-dialog -->
+	</div><!-- /.modal -->
+{% endif %}
 
 {% endblock %}

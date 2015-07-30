@@ -10,6 +10,7 @@ from django.db.models import F
 import json
 import random
 import datetime
+import slg
 
 NUM_RECS_IN_PROFILE = 10
 
@@ -206,6 +207,93 @@ def track_search(request, rec_id):
 
     return HttpResponse(template.render(context))
 
+@csrf_exempt
+def track_info(request):
+    result = {'status' : 'ok'}
+
+    if request.method != 'POST':
+        result = get_error_response(400, 'invalid request method')
+        return JsonResponse(result)
+
+    data = json.loads(request.body)
+
+    if 'track_id' not in data:
+        result = get_error_response(400, 'missing data')
+        return JsonResponse(result)
+
+    track_data = {}
+    try:
+        track_profile = slg.getTrackProfile(data['track_id'])
+        track_data['artist_name'] = track_profile.artistName
+        track_data['artist_id'] = track_profile.artistId
+        track_data['id'] = track_profile.id
+        track_data['name'] = track_profile.name
+        track_data['album'] = track_profile.albumName
+        track_data['descriptors'] = []
+
+        mood_cnt = 0
+        for d in track_profile.descriptors:
+
+            if d.descriptorCategory == slg.SlgDescriptorCategory.TEMPO:
+                continue
+
+            if d.descriptorCategory == slg.SlgDescriptorCategory.MOOD:
+                if mood_cnt >= 10:
+                    continue
+                else:
+                    mood_cnt += 1
+
+            track_data['descriptors'].append({
+                    'type' : slg.SlgDescriptorCategory.getString(d.descriptorCategory),
+                    'id' : d.id,
+                    'name' : d.name,
+                    'weight' : d.weight
+                })
+    except Exception as e:
+        print str(e)
+        result = get_error_response(500, 'could not contact SLG')
+        return JsonResponse(result)
+
+    result['track_info'] = track_data
+    
+    return JsonResponse(result)
+
+@csrf_exempt
+def track_name_search(request):
+
+    result = {'status' : 'ok'}
+
+    if request.method != 'POST':
+        result = get_error_response(400, 'invalid request method')
+        return JsonResponse(result)
+
+    data = json.loads(request.body)
+
+    if 'artist_name' not in data or 'track_name' not in data:
+        result = get_error_response(400, 'missing data')
+        return JsonResponse(result)
+
+    search_results = []
+
+    try:
+        server_data = slg.searchTrack(data['artist_name'], data['track_name'])
+    except:
+        result = get_error_response(500, 'could not contact SLG')
+        return JsonResponse(result)
+
+    for track in server_data:
+        search_results.append({
+                'artist_id' : str(track[0]),
+                'artist_name' : track[1],
+                'id' : str(track[2]),
+                'name' : track[3]
+            })
+
+    result['search_results'] = search_results
+    
+    return JsonResponse(result)
+
+@csrf_exempt
 def add_gracenoteid(request):
     result = {'status' : 'ok'}
 
