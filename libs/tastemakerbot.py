@@ -40,7 +40,7 @@ class TasteMakerBot:
     help_message = 'Hola! I am the Gracenote Tastemaker Bot. I understand 2 commands:\n\n' \
                     '\t*dime* to get a recommendation\n' \
                     '\t*ten* to add a recommendation\n\n' \
-                    'Simply type *ten* or *dime* and I\'ll take it from there.\n'
+                    'Simply type *ten* or *dime* and I\'ll take it from there. Muy fácil!\n'
 
     bad_language_message = 'Que patán! No need for profanity.'
     bad_language = ['fuck', 'shit', 'bitch', 'ass', 'slut', 'cunt', 'dick', 'whore', 'puta']
