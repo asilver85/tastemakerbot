@@ -12,6 +12,7 @@
 	<div id="alert-artist-missing" class="alert alert-danger" role="alert" style="display: none;">
 		Artist name is missing!
 	</div>
+	<div id="rec-id" style="display: none;">{{ rec_id }}</div>
 	<div id="search-page">
 		<form class="form-inline" onsubmit="return search_track();">
 			<div class="form-group">
@@ -42,7 +43,7 @@
         			<div id="modal-track-info">Loading track info...</div>
       			</div>
       			<div class="modal-footer">
-      				<button type="button" class="btn btn-primary">Set Id!</button>
+      				<button type="button" class="btn btn-primary" onclick="set_id();">Set Id!</button>
         			<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
       			</div>
     		</div><!-- /.modal-content -->

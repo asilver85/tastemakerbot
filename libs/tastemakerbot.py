@@ -7,6 +7,7 @@ import datetime
 import logging
 import os
 import requests
+import random
 
 from slackclient import SlackClient
 from tendo import singleton
@@ -38,10 +39,11 @@ class TasteMakerBot:
 
     help_message = 'Hola! I am the Gracenote Tastemaker Bot. I understand 2 commands:\n\n' \
                     '\t*dime* to get a recommendation\n' \
-                    '\t*ten* to add a recommendation\n'
+                    '\t*ten* to add a recommendation\n\n' \
+                    'Simply type *ten* or *dime* and I\'ll take it from there.\n'
 
     bad_language_message = 'Que patán! No need for profanity.'
-    bad_language = ['fuck', 'shit', 'bitch', 'ass', 'slut', 'cunt', 'dick', 'whore']
+    bad_language = ['fuck', 'shit', 'bitch', 'ass', 'slut', 'cunt', 'dick', 'whore', 'puta']
 
     def __init__(self, slack_client):
         self.userid = ''
@@ -287,7 +289,7 @@ class RecEngine:
             data['recommendation_from'] = from_username
 
         r = requests.post(url, data=json.dumps(data))
-        print r.text
+        #print r.text
         result = json.loads(r.text)
 
         if result['status'] != 'ok':
@@ -313,7 +315,7 @@ class RecEngine:
         }
 
         r  = requests.post(url, data=json.dumps(data))
-        print r.text
+        #print r.text
         result = json.loads(r.text)
         if result['status'] != 'ok':
             return False, result['error_id'], result['error_message']
@@ -330,7 +332,7 @@ class RecEngine:
         }
 
         r = requests.post(url, data=json.dumps(data))
-        print r.text
+        #print r.text
         result = json.loads(r.text)
         if result['status'] != 'ok':
             return False, result['error_id'], result['error_message']
@@ -363,6 +365,26 @@ class BotConversation:
                     'That link is too long. Try something less than 256 characters.'
                 ]
     }
+
+    like_response_list = [
+                        'Cool, me too!',
+                        ':)',
+                        'Chévere',
+                        'Right on!',
+                        'Suave',
+                        'The queen of the hoboes also likes this!',
+                        'Yay!',
+                        'Chido'
+    ]
+
+    dislike_response_list = [
+                        'Uy, lo siento',
+                        'I hope you like the next one better',
+                        'Yeah, not crazy about that one myself',
+                        '@#$%&! (censored)',
+                        'Noted',
+                        'Que fiasco!'
+    ]
 
     def __init__(self, username, message):
         
@@ -422,15 +444,17 @@ class BotConversation:
             ### like/dislike recommendation####
             elif self.convo_index == 1:
                 like = None
+                like_message = None
                 if response_low.startswith('y'):
                     like = True
+                    like_message = random.choice(BotConversation.like_response_list)
                 elif response_low.startswith('n'):
                     like = False
-                
+                    like_message = random.choice(BotConversation.dislike_response_list)
                 if like is not None:
                     result = self.rec_engine.add_like_dislike(self.username, self.rec_id, like)
                     if result[0]:
-                        self.messages = [BotConversation.convo_map[self.convo_key][1]]
+                        self.messages = [like_message]
                     elif result[1] == 409:
                         self.messages = [BotConversation.convo_map[self.convo_key][3]]
                     else:

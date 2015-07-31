@@ -1,4 +1,6 @@
 
+var g_track_id = '';
+
 function search_track()
 {
 	var artist_name = $('#artist-name').val();
@@ -79,7 +81,7 @@ function on_track_selected(row)
 function load_track_info(track_id)
 {
 	$('#modal-track-info').html('Loading track info...');
-
+	g_track_id = track_id;
 	$.ajax({
 		type: 'POST',
 		url: window.location.protocol + '//' + window.location.host + '/recs/trackinfo/',
@@ -88,7 +90,6 @@ function load_track_info(track_id)
 		dataType: 'json',
 		data: JSON.stringify({track_id: track_id}),
 		success: function(data) {
-			console.log(data);
 			if (data.status != 'ok') {
 				$('#modal-track-info').html('Oops, an error occurred.');
 			}
@@ -136,4 +137,31 @@ function update_track_info(track)
 	html[i++] = '</table>';
 
 	$('#modal-track-info').html(html.join(''));
+}
+
+function set_id()
+{
+	var rec_id = $('#rec-id').html();
+	$('#modal-track_select').modal('hide');
+	$('#search-page').html('Loading...');
+	$.ajax({
+		type: 'POST',
+		url: window.location.protocol + '//' + window.location.host + '/recs/gracenote_id/',
+		async: true,
+		timeout: 10000,
+		dataType: 'json',
+		data: JSON.stringify({gracenote_id: g_track_id, recommendation_id: rec_id}),
+		success: function(data) {
+			
+			if (data.status != 'ok') {
+				$('#search-page').html('Oops, an error occurred.');
+			}
+			else {
+				$('#search-page').html('Great! Track id has been set!');
+			}
+		},
+		error: function(data) {
+			$('#search-page').html('Oops, an error occurred.');
+		}
+	});
 }

@@ -57,11 +57,8 @@ def get_recommendation(request):
             rec = get_rand_rec(user.id, last_rec_ids, rec_user)
         else:
             rand_candidates = get_rand_recs_sample(user.id, last_rec_ids, rec_user, MAX_CANDIDATES_RAND)
-            print 'HERE AFTER RAND'
             like_dislike_map, like_ids = get_user_like_info(user)
-            print 'HERE likes: %d' % len(like_ids) 
             collab_filt_candidates = get_collab_filter_recs_sample(user, like_ids, like_dislike_map, last_rec_ids, MAX_CANDIDATE_COLLAB_FILTER)
-            print 'AFTER COLLAB FILT'
             all_candidates = rand_candidates + collab_filt_candidates
             if len(all_candidates) > 0:
                 rec = random.choice(all_candidates)
@@ -201,9 +198,16 @@ def track_search(request, rec_id):
     rec = UserRecommendation.objects.get(id=rec_id)
 
     template = loader.get_template('tracksearch.html')
-    context = RequestContext(request, {
-        'rec_link': rec.link
-    })
+
+    data = {
+        'rec_link': rec.link,
+        'rec_id' : rec.id
+    }
+
+    if rec.gracenote_id:
+        data['gracenote_id'] = rec.gracenote_id
+
+    context = RequestContext(request, data)
 
     return HttpResponse(template.render(context))
 
