@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.template import RequestContext, loader
 from models import User, UserRecommendation, UserLikeDislike
+from django.db.models import Sum
 from django.db.models import F
 import json
 import random
@@ -323,6 +324,27 @@ def add_gracenoteid(request):
         result = get_error_response(500, 'unknown error')
 
     return JsonResponse(result)
+
+@csrf_exempt
+def top_tastemakers(request):
+    template = loader.get_template('toptastemakers.html')
+    top_users = UserRecommendation.objects.values('user_id').annotate(num_likes=Sum('likes')).order_by('-num_likes')[:10]
+    top_user_list = []
+    for top_user in top_users:
+        print top_user
+        top_user_list.append(
+                {
+                    'name' : User.objects.get(id=top_user['user_id']).slack_username,
+                    'likes' : top_user['num_likes']
+                }
+            )
+
+    context = RequestContext(request, {
+            'top_users' : top_user_list
+        })
+
+    return HttpResponse(template.render(context))
+
 
 def is_youtube(link):
     return 'youtube.com' in link or 'youtu.be' in link

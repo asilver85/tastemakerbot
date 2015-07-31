@@ -1,0 +1,26 @@
+{% extends "basetracksearch.html" %}
+
+{% block content %}
+<div class="page-header">
+	<h1>Top Gracenote Tastemakers!</h1>
+</div>
+
+<table class="table table-condensed table-striped">
+	<thead>
+		<tr>
+			<th>Username</th>
+			<th>Total Likes</th>
+		</tr>
+	</thead>
+
+	<tbody>
+		{% for user in top_users %}
+			<tr>
+				<td> {{ user.name }} </td>
+				<td> {{ user.likes }} </td>
+			</tr> 
+		{% endfor %}
+	</tbody>
+</table>
+
+{% endblock %}
