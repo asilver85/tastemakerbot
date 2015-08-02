@@ -331,16 +331,29 @@ def top_tastemakers(request):
     top_users = UserRecommendation.objects.values('user_id').annotate(num_likes=Sum('likes')).order_by('-num_likes')[:10]
     top_user_list = []
     for top_user in top_users:
-        print top_user
         top_user_list.append(
                 {
                     'name' : User.objects.get(id=top_user['user_id']).slack_username,
                     'likes' : top_user['num_likes']
                 }
+            
+
+            )
+
+    top_recs = UserRecommendation.objects.all().order_by('-likes')[:10]
+    top_recs_list = []
+    for top_rec in top_recs:
+        top_recs_list.append(
+                {
+                    'user' : top_rec.user.slack_username,
+                    'likes' : top_rec.likes,
+                    'link' : top_rec.link
+                }
             )
 
     context = RequestContext(request, {
-            'top_users' : top_user_list
+            'top_users' : top_user_list,
+            'top_recs' : top_recs_list
         })
 
     return HttpResponse(template.render(context))
@@ -472,6 +485,10 @@ def get_collab_filter_recs_sample(user, like_ids, like_dislike_map, last_rec_ids
     for other_like_dislike in other_like_dislikes:
         recid = other_like_dislike.rec.id
         userid = other_like_dislike.user.id
+
+        ### make sure it is not a rec by the same user ###
+        if userid == user.id:
+            continue
 
         if recid in like_dislike_map:
             if other_like_dislike.like == like_dislike_map[recid]:

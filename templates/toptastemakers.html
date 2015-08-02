@@ -23,4 +23,24 @@
 	</tbody>
 </table>
 
+<table class="table table-condensed table-striped">
+	<thead>
+		<tr>
+			<th>Username</th>
+			<th>Link</th>
+			<th>Likes</th>
+		</tr>
+	</thead>
+
+	<tbody>
+		{% for rec in top_recs %}
+			<tr>
+				<td> {{ rec.user }} </td>
+				<td><a href="{{ rec.link }}">Click to see recommendation</a> </td>
+				<td> {{ rec.likes }} </td>
+			</tr>
+		{% endfor %}
+	</tbody>
+</table>
+
 {% endblock %}
