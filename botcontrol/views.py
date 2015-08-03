@@ -15,7 +15,11 @@ scriptfile = 'tastemakerbot.py'
 def index(request):
 
     template = loader.get_template('botcontrol.html')
-    context = RequestContext(request)
+    context = RequestContext(request, {
+            'logout_url' : settings.LOGOUT_URL,
+            'login_url' : settings.LOGIN_URL,
+            'bot_signon_path' : settings.FORCE_SCRIPT_NAME + '/botcontrol/signon/'
+        })
     
     return HttpResponse(template.render(context))    
 

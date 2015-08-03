@@ -1,6 +1,18 @@
 
 var g_track_id = '';
 
+var path_array = window.location.pathname.split('/');
+var path_to_api = path_array[0];
+if (path_array.length > 2)
+	path_to_api += '/' + path_array[1];
+
+if (path_to_api[0] != '/')
+	path_to_api = '/' + path_to_api
+
+var api_url = window.location.protocol + '//' 
+	+ window.location.host 
+	+ path_to_api;
+
 function search_track()
 {
 	var artist_name = $('#artist-name').val();
@@ -18,7 +30,7 @@ function search_track()
 
 	$.ajax({
 		type: 'POST',
-		url: window.location.protocol + '//' + window.location.host + '/recs/trackname/',
+		url: api_url + '/trackname/',
 		async: true,
 		timeout: 10000,
 		dataType: 'json',
@@ -84,7 +96,7 @@ function load_track_info(track_id)
 	g_track_id = track_id;
 	$.ajax({
 		type: 'POST',
-		url: window.location.protocol + '//' + window.location.host + '/recs/trackinfo/',
+		url: api_url + '/trackinfo/',
 		async: true,
 		timeout: 10000,
 		dataType: 'json',
@@ -146,7 +158,7 @@ function set_id()
 	$('#search-page').html('Loading...');
 	$.ajax({
 		type: 'POST',
-		url: window.location.protocol + '//' + window.location.host + '/recs/gracenote_id/',
+		url: api_url + '/gracenote_id/',
 		async: true,
 		timeout: 10000,
 		dataType: 'json',

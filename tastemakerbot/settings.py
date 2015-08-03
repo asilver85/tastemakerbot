@@ -101,18 +101,21 @@ USE_L10N = True
 
 USE_TZ = True
 
+FORCE_SCRIPT_NAME = ''
+#FORCE_SCRIPT_NAME = '/slackbot'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = FORCE_SCRIPT_NAME + '/static/'
 STATICFILES_DIRS = (
     os.path.join(BASE_DIR, 'static'),
 )
 
-LOGIN_URL = '/login/'
-LOGOUT_URL = '/logout/'
-LOGIN_REDIRECT_URL = '/botcontrol/'
+
+LOGIN_URL = FORCE_SCRIPT_NAME + '/login/'
+LOGOUT_URL = FORCE_SCRIPT_NAME + '/logout/'
+LOGIN_REDIRECT_URL = FORCE_SCRIPT_NAME + '/botcontrol/'
 
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 86400
