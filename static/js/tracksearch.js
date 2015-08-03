@@ -1,9 +1,15 @@
 
 var g_track_id = '';
 
-var path_array = window.location.pathname.split('/');
+var path_array_temp = window.location.pathname.split('/');
+var path_array = [];
+for (var i = 0; i < path_array_temp.length; ++i) {
+	if (path_array_temp[i].length > 0)
+		path_array.push(path_array_temp[i]);
+}
+
 var path_to_api = path_array[0];
-if (path_array.length > 2)
+if (path_array.length > 3)
 	path_to_api += '/' + path_array[1];
 
 if (path_to_api[0] != '/')
