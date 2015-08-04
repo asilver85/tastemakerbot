@@ -487,7 +487,7 @@ def get_collab_filter_recs_sample(user, like_ids, like_dislike_map, last_rec_ids
         userid = other_like_dislike.user.id
 
         ### make sure it is not a rec by the same user ###
-        if userid == user.id:
+        if other_like_dislike.rec.user.id == user.id:
             continue
 
         if recid in like_dislike_map:
